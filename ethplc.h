@@ -77,6 +77,7 @@ SOFTWARE.
 struct pl360_trac {
 	u64 tx_success;
 	u64 rx_success;
+	u64 rx_drop;
 	u64 invalid;
 };
 
@@ -96,7 +97,6 @@ struct pl360_local {
 	u8 max_cca_retries;
 	u8 max_be;
 	u8 min_be;
-	struct pl360_trac trac;
 
 	int gpio_nrst;
 	int gpio_irq;
@@ -119,7 +119,7 @@ typedef struct {
 } plc_pkt_t;
 
 int ops_pl360_start(struct net_device *ndev);
-void ops_pl360_stop(struct net_device *ndev);
+int ops_pl360_stop(struct net_device *ndev);
 void pl360_handle_rx_work(struct work_struct *work);
 int ops_pl360_xmit(struct sk_buff *skb, struct net_device *dev);
 // Hardware

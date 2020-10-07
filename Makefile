@@ -4,7 +4,7 @@ ifndef KERNELDIR
 endif
 
 obj-m += $(TARGET).o
-ethplc-objs := ethplc.o pl360_ops.o pl360_hw.o
+ethplc-objs := ethpl360.o pl360_ops.o pl360_hw.o
 ccflags-y := -std=gnu99 -Wno-declaration-after-statement
 
 all:
@@ -18,5 +18,5 @@ install:
 	/sbin/depmod -A
 
 dts:
-	dtc -@ -I dts -O dtb -o $(TARGET).dtbo $(TARGET)-overlay.dts
-	cp $(TARGET).dtbo /boot/overlays/
+	dtc -@ -I dts -O dtb -o pl360.dtbo pl360-overlay.dts
+	cp pl360.dtbo /boot/overlays/

@@ -28,13 +28,15 @@ SOFTWARE.
 #include <linux/ethtool.h>
 #include "ethplc.h"
 
+
 #define DRV_NAME	"pl360"
 #define DRV_VERSION	"1.01a"
 
-/* use ethtool to change the level for any given device */
-static struct {
-	u32 msg_enable;
-} debug = { -1 };
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Eug Krashtan <eug.krashtan@gmail.com>");
+MODULE_DESCRIPTION(DRV_NAME "Ethernet emulator Driver");
+
+#define TX_TIMEOUT		(4 * HZ)
 
 static const struct net_device_ops pl360_netdev_ops = {
 	.ndo_open		= ops_pl360_start,
@@ -57,8 +59,6 @@ static int
 pl360_get_link_ksettings(struct net_device *dev,
 			    struct ethtool_link_ksettings *cmd)
 {
-	struct pl360_local *priv = netdev_priv(dev);
-
 	ethtool_link_ksettings_zero_link_mode(cmd, supported);
 	ethtool_link_ksettings_add_link_mode(cmd, supported, 10baseT_Half);
 	ethtool_link_ksettings_add_link_mode(cmd, supported, TP);
@@ -100,7 +100,7 @@ static const struct ethtool_ops pl360_ethtool_ops = {
 
 static int pl360_probe(struct spi_device *spi)
 {
-	const char *mac_addr;
+	unsigned char macaddr[ETH_ALEN];
 	struct net_device *dev;
 	struct pl360_local *priv;
 	int ret;
@@ -122,9 +122,8 @@ static int pl360_probe(struct spi_device *spi)
     SET_NETDEV_DEV(dev, &spi->dev);
 
 	/* set kernel MAC address to dev */
-	mac_addr = of_get_mac_address(dev->of_node);
-	if (!IS_ERR(mac_addr))
-		ether_addr_copy(dev->dev_addr, mac_addr);
+	if (device_get_mac_address(&spi->dev, macaddr, sizeof(macaddr)))
+		ether_addr_copy(dev->dev_addr, macaddr);
 	else
 		eth_hw_addr_random(dev);
 
@@ -137,7 +136,7 @@ static int pl360_probe(struct spi_device *spi)
 
 	ret = pl360_hw_init(priv);
 	if (ret) {
-		printk("pl360 HW err %d\n", ret);
+		dev_err(&spi->dev, "pl360 HW err %d\n", ret);
 		goto err_hw_init;
 	}
 
@@ -155,15 +154,13 @@ static int pl360_probe(struct spi_device *spi)
 		goto error_register;
 	}
 
-	//pl360_debugfs_init(lp);
-
 	return ret;
 
 error_register:
 	free_irq(spi->irq, priv);
 err_hw_init:
-	mutex_destroy(&lp->bmux);
-	free_netdev(lp->netdev);
+	mutex_destroy(&priv->bmux);
+	free_netdev(priv->netdev);
 
 error_alloc:
 	return ret;
@@ -211,7 +208,3 @@ static struct spi_driver pl360_driver = {
 };
 
 module_spi_driver(pl360_driver);
-
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Eug Krashtan <eug.krashtan@gmail.com>");
-MODULE_DESCRIPTION(DRV_NAME "Ethernet emulator Driver");

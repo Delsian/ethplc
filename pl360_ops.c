@@ -311,7 +311,7 @@ static uint8_t get_pos_and_len(uint8_t in, uint8_t* real_len) {
 }
 
 static void clear_parts(eth_pl360_rx_t* pkt) {
-	printk("Clear part %p key 0x%04x", pkt, pkt->key);
+	//printk("Clear part %p key 0x%04x", pkt, pkt->key);
 	pkt->key = 0;
 	for (int i = 0; i < MAX_ETH_PLC_PARTS; i++) {
 		if (pkt->parts[i]) {
@@ -354,12 +354,12 @@ static int pl360_rx(struct pl360_local *lp, plc_pkt_t* pkt) {
 	struct sk_buff *skb = NULL;
 	uint8_t* skbuf;
 	uint8_t real_len;
-	int i;
+	int i, res;
 	eth_pl360_part_t* part = (eth_pl360_part_t*) pkt->buf;
 	uint8_t pos = get_pos_and_len(part->len, &real_len);
 	int index = parts_check_key(part->key);
-	printk("RX len %d part %d key 0x%04x idx %d", real_len,
-				pos, part->key, index);
+	/*printk(KERN_DEBUG "RX len %d part %d key 0x%04x idx %d", real_len,
+				pos, part->key, index);*/
 
 	if (pos == 0) { // Allocate new storage
 		index = MAX_ETH_PLC_SESSIONS - 1; // If no free space - use last
@@ -374,14 +374,14 @@ static int pl360_rx(struct pl360_local *lp, plc_pkt_t* pkt) {
 		// Maximum time to wait parts
 		rx_parts[index].age = MAX_ETH_PLC_PARTS*MAX_ETH_PLC_SESSIONS;
 		memcpy(rx_parts[index].parts[0], part->payload, MAX_PAYLOAD_LEN);
-		printk("New part %p key 0x%04x", &rx_parts[index], part->key);
+		//printk(KERN_DEBUG "New part %p key 0x%04x", &rx_parts[index], part->key);
 	} else if (pos == LAST_PART_INDICATOR) { // Packet ready to handle
 		if (index == -1) {
 			// Single part
 			skb = netdev_alloc_skb(lp->netdev, real_len);
 			if (!skb) {
 				netdev_err(lp->netdev, "failed to allocate sk_buff\n");
-				lp->trac.invalid++;
+				lp->netdev->stats.rx_errors++;
 				return -ENOMEM;
 			} else {
 				skbuf = skb_put(skb, real_len);
@@ -392,7 +392,7 @@ static int pl360_rx(struct pl360_local *lp, plc_pkt_t* pkt) {
 			if (!skb) {
 				netdev_err(lp->netdev, "failed to allocate sk_buff\n");
 				clear_parts(&(rx_parts[index]));
-				lp->trac.invalid++;
+				lp->netdev->stats.rx_errors++;
 				return -ENOMEM;
 			} else {
 				for (int i = 0; i < MAX_ETH_PLC_PARTS; i++) {
@@ -408,27 +408,33 @@ static int pl360_rx(struct pl360_local *lp, plc_pkt_t* pkt) {
 			}
 		}
 	} else if (pos > MAX_ETH_PLC_PARTS) { // wrong packet
-		lp->trac.invalid++;
+		lp->netdev->stats.rx_frame_errors++;
 		return -1;
 	} else { // add to sequence
 		// Check if we lost previous piece
 		if (rx_parts[index].parts[pos-1] == NULL) {
-			printk("Lost part with key 0x%04x piece %d", 
-							rx_parts[index].key, pos-1);
+			/*printk("Lost part with key 0x%04x piece %d", 
+							rx_parts[index].key, pos-1);*/
 			clear_parts(&rx_parts[index]);
-			lp->trac.invalid++;
+			lp->netdev->stats.rx_missed_errors++;
 		} else {
 			rx_parts[index].parts[pos] = kmalloc(MAX_PAYLOAD_LEN, GFP_KERNEL);
 			memcpy(rx_parts[index].parts[pos], part->payload, MAX_PAYLOAD_LEN);
-			printk("Add part with key 0x%04x piece %d", 
-							part->key, pos);
+			/*printk(KERN_DEBUG "Add part with key 0x%04x piece %d", 
+							part->key, pos);*/
 		}
 	}
 
 	if (skb) {
 		skb->protocol = eth_type_trans(skb, lp->netdev);
-		netif_rx(skb);
-		lp->trac.rx_success++;
+		int len = skb->len;
+		res = netif_rx_ni(skb);
+		if (res == NET_RX_SUCCESS) {
+			lp->netdev->stats.rx_packets++;
+			lp->netdev->stats.rx_bytes += len;
+		} else {
+			lp->netdev->stats.rx_dropped++;
+		}
 	}
 	return 0;
 }
@@ -456,7 +462,6 @@ void pl360_handle_rx_work(struct work_struct *work)
 			//tx_cfm_t* cfm = (tx_cfm_t*)cfmpkt->buf;
 			txstate = TX_READY;
 			kfree(cfmpkt);
-			lp->trac.tx_success++;
 		} else if (lp->events & ATPL360_REG_RSP_MASK) {
 			// Handle RegResp
 			plc_pkt_t* rsppkt;
@@ -585,8 +590,6 @@ int ops_pl360_start(struct net_device *ndev)
 	int ret = 0;
 	struct pl360_local *lp = netdev_priv(ndev);
 
-	memset(&lp->trac, 0, sizeof(struct pl360_trac));
-
 	ret = kfifo_alloc(&tx_fifo,PL360_FIFO_SIZE,GFP_KERNEL);
 	if(ret) {
 		goto err_ops_start;
@@ -610,7 +613,7 @@ int ops_pl360_start(struct net_device *ndev)
 	ret = request_irq(lp->irq_id, pl360_irq,
 		IRQF_TRIGGER_FALLING, "pl360-irq", spi_get_drvdata(lp->spi)	);
 	if(ret) {
-		printk( KERN_INFO "ISR handler req fail %d\n", ret );
+		printk(KERN_INFO "ISR handler req fail %d\n", ret );
 	}
 
 	/* Update RX status */
@@ -621,13 +624,14 @@ err_ops_start:
 }
 
 
-void ops_pl360_stop(struct net_device *ndev)
+int ops_pl360_stop(struct net_device *ndev)
 {
 	struct pl360_local *lp = netdev_priv(ndev);
 
 	disable_irq(lp->spi->irq);
 	flush_workqueue(lp->wqueue);
 	kfifo_free(&tx_fifo);
+	return 0;
 }
 
 int ops_pl360_xmit(struct sk_buff *skb, struct net_device *dev) {
@@ -635,10 +639,15 @@ int ops_pl360_xmit(struct sk_buff *skb, struct net_device *dev) {
 	plc_pkt_t* pkt;
 	struct pl360_local *lp = netdev_priv(dev);
 	short len = skb->len;
+
+	/* Drop IPv4 packets, only 0x86dd type allowed */
+	if (len>14 && skb->data[12] == 0x08 ) {
+		return 0;
+	}
+
 	bool is_first = true;
 	index += 3;
 
-	printk("TX pkt len %u key 0x%04x", len, index);
 	uint8_t partnum = 0;
 	while (len > 0) {
     	pkt = (plc_pkt_t*) kmalloc(sizeof(plc_pkt_t)
@@ -665,6 +674,9 @@ int ops_pl360_xmit(struct sk_buff *skb, struct net_device *dev) {
 			is_first = false;
 		}
 	}
-
+	/*printk(KERN_DEBUG "TX pkt len %u key 0x%04x parts %d", 
+				skb->len, index, partnum+1);*/
+	lp->netdev->stats.tx_packets++;
+	lp->netdev->stats.tx_bytes += skb->len;
     return 0;
 }
