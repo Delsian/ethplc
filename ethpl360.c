@@ -145,6 +145,8 @@ static int pl360_probe(struct spi_device *spi)
 	dev->netdev_ops = &pl360_netdev_ops;
 	dev->watchdog_timeo = TX_TIMEOUT;
 	dev->ethtool_ops = &pl360_ethtool_ops;
+	const char plcname[] = "plc";
+	memcpy(dev->name, plcname, strlen(plcname));
 
 	ret = register_netdev(dev);
 	if (ret) {
