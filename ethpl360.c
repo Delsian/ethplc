@@ -100,7 +100,10 @@ static const struct ethtool_ops pl360_ethtool_ops = {
 
 static int pl360_probe(struct spi_device *spi)
 {
-	unsigned char macaddr[ETH_ALEN];
+	unsigned char macaddr[ETH_ALEN] ={
+		// Fake MAC if read CPU serial fails
+		0x5e, 0x00, 0x11, 0x22, 0x33, 0x44
+	};
 	struct net_device *dev;
 	struct pl360_local *priv;
 	int ret;
@@ -121,11 +124,20 @@ static int pl360_probe(struct spi_device *spi)
 	spi_set_drvdata(spi, priv);
     SET_NETDEV_DEV(dev, &spi->dev);
 
-	/* set kernel MAC address to dev */
-	if (device_get_mac_address(&spi->dev, macaddr, sizeof(macaddr)))
-		ether_addr_copy(dev->dev_addr, macaddr);
-	else
-		eth_hw_addr_random(dev);
+	/* set device serial as MAC address */
+	struct device_node *root;                                               
+    const char *serial;
+	unsigned long long sn;
+	root = of_find_node_by_path("/");
+	ret = of_property_read_string(root, "serial-number", &serial);
+	if (ret == 0) {
+		ret = kstrtoull(serial, 16, &sn);
+		if(ret == 0 && sn) {
+			int low = sn & 0xFFFFFFFF;
+			memcpy(&macaddr[2], &low, 4);
+		}
+	}
+	ether_addr_copy(dev->dev_addr, macaddr);
 
 	priv->wqueue = create_singlethread_workqueue(dev_name(&priv->spi->dev));
 	if (unlikely(!priv->wqueue)) {
