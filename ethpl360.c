@@ -40,8 +40,12 @@ MODULE_DESCRIPTION(DRV_NAME "Ethernet emulator Driver");
 
 static int ops_set_mac_address(struct net_device *ndev, void *address)
 {
-	if (address)
-    	memcpy(ndev->dev_addr, address, ETH_ALEN);
+	if (address) {
+		unsigned char* t = (unsigned char*)address;
+		//printk("%x %x %x %x %x\n",t[0],t[1],t[3],t[5],t[7]);
+		// Strange behaviour - unexpected trailing 2 bytes :(
+    	memcpy(ndev->dev_addr, &(t[2]), ETH_ALEN);
+	}
 	return 0;
 }
 
