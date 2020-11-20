@@ -38,10 +38,18 @@ MODULE_DESCRIPTION(DRV_NAME "Ethernet emulator Driver");
 
 #define TX_TIMEOUT		(4 * HZ)
 
+static int ops_set_mac_address(struct net_device *ndev, void *address)
+{
+	if (address)
+    	memcpy(ndev->dev_addr, address, ETH_ALEN);
+	return 0;
+}
+
 static const struct net_device_ops pl360_netdev_ops = {
 	.ndo_open		= ops_pl360_start,
 	.ndo_stop		= ops_pl360_stop,
 	.ndo_start_xmit		= ops_pl360_xmit,
+	.ndo_set_mac_address = ops_set_mac_address
 };
 
 /* ......................... ETHTOOL SUPPORT ........................... */

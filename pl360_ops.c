@@ -629,6 +629,7 @@ int ops_pl360_stop(struct net_device *ndev)
 	struct pl360_local *lp = netdev_priv(ndev);
 
 	disable_irq(lp->spi->irq);
+	free_irq(lp->irq_id, spi_get_drvdata(lp->spi));
 	flush_workqueue(lp->wqueue);
 	kfifo_free(&tx_fifo);
 	return 0;
