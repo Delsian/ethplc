@@ -46,7 +46,7 @@ SOFTWARE.
 /** PDC buffer us_size to firmware update process */
 #define PDC_SPI_FUP_BUFFER_SIZE        PDC_SPI_MSG_DATA_SIZE
 /* Max PLC size is 163, use 160 for data */
-#define MAX_PLC_PKT_LEN 163
+#define MAX_PLC_PKT_LEN 160
 
 #define PLC_CMD_READ							0
 #define PLC_CMD_WRITE							1

@@ -358,8 +358,8 @@ static int pl360_rx(struct pl360_local *lp, plc_pkt_t* pkt) {
 	eth_pl360_part_t* part = (eth_pl360_part_t*) pkt->buf;
 	uint8_t pos = get_pos_and_len(part->len, &real_len);
 	int index = parts_check_key(part->key);
-	/*printk(KERN_DEBUG "RX len %d part %d key 0x%04x idx %d", real_len,
-				pos, part->key, index);*/
+	//printk(KERN_DEBUG "RX len %d part %d key 0x%04x idx %d", real_len,
+	//			pos, part->key, index);
 
 	if (pos == 0) { // Allocate new storage
 		index = MAX_ETH_PLC_SESSIONS - 1; // If no free space - use last
@@ -374,13 +374,14 @@ static int pl360_rx(struct pl360_local *lp, plc_pkt_t* pkt) {
 		// Maximum time to wait parts
 		rx_parts[index].age = MAX_ETH_PLC_PARTS*MAX_ETH_PLC_SESSIONS;
 		memcpy(rx_parts[index].parts[0], part->payload, MAX_PAYLOAD_LEN);
-		//printk(KERN_DEBUG "New part %p key 0x%04x", &rx_parts[index], part->key);
+		//printk(KERN_DEBUG "New part %p id %d key 0x%04x", 
+		//			&rx_parts[index], index, part->key);
 	} else if (pos == LAST_PART_INDICATOR) { // Packet ready to handle
 		if (index == -1) {
 			// Single part
 			skb = netdev_alloc_skb(lp->netdev, real_len);
 			if (!skb) {
-				netdev_err(lp->netdev, "failed to allocate sk_buff\n");
+				printk(KERN_DEBUG "failed to allocate sk_buff");
 				lp->netdev->stats.rx_errors++;
 				return -ENOMEM;
 			} else {
@@ -390,7 +391,7 @@ static int pl360_rx(struct pl360_local *lp, plc_pkt_t* pkt) {
 		} else {
 			skb = netdev_alloc_skb(lp->netdev, PLC_MTU);
 			if (!skb) {
-				netdev_err(lp->netdev, "failed to allocate sk_buff\n");
+				printk(KERN_DEBUG "failed to allocate sk_buff");
 				clear_parts(&(rx_parts[index]));
 				lp->netdev->stats.rx_errors++;
 				return -ENOMEM;
@@ -398,30 +399,33 @@ static int pl360_rx(struct pl360_local *lp, plc_pkt_t* pkt) {
 				for (int i = 0; i < MAX_ETH_PLC_PARTS; i++) {
 					if (rx_parts[index].parts[i]) {
 						skbuf = skb_put(skb, MAX_PAYLOAD_LEN);
-						memcpy(skbuf, part->payload, MAX_PAYLOAD_LEN);
+						memcpy(skbuf, rx_parts[index].parts[i], MAX_PAYLOAD_LEN);
+						//printk(KERN_DEBUG "copy part %d",i);
 					} else {
 						break;
 					}
 				}
 				skbuf = skb_put(skb, real_len);
 				memcpy(skbuf, part->payload, real_len);
+				clear_parts(&(rx_parts[index]));
 			}
 		}
 	} else if (pos > MAX_ETH_PLC_PARTS) { // wrong packet
 		lp->netdev->stats.rx_frame_errors++;
+		//printk(KERN_DEBUG "Pkt idx error: %d", pos);
 		return -1;
 	} else { // add to sequence
 		// Check if we lost previous piece
 		if (rx_parts[index].parts[pos-1] == NULL) {
-			/*printk("Lost part with key 0x%04x piece %d", 
-							rx_parts[index].key, pos-1);*/
+			//printk("Lost part with key 0x%04x piece %d", 
+			//				rx_parts[index].key, pos-1);
 			clear_parts(&rx_parts[index]);
 			lp->netdev->stats.rx_missed_errors++;
 		} else {
 			rx_parts[index].parts[pos] = kmalloc(MAX_PAYLOAD_LEN, GFP_KERNEL);
 			memcpy(rx_parts[index].parts[pos], part->payload, MAX_PAYLOAD_LEN);
-			/*printk(KERN_DEBUG "Add part with key 0x%04x piece %d", 
-							part->key, pos);*/
+			//printk(KERN_DEBUG "Add part %p with key 0x%04x piece %d", 
+			//				&rx_parts[index], part->key, pos);
 		}
 	}
 
@@ -650,13 +654,13 @@ int ops_pl360_xmit(struct sk_buff *skb, struct net_device *dev) {
 	index += 3;
 
 	uint8_t partnum = 0;
+	int dataptr = 0;
 	while (len > 0) {
     	pkt = (plc_pkt_t*) kmalloc(sizeof(plc_pkt_t)
 				+ MAX_PLC_PKT_LEN, GFP_KERNEL);
 		pkt->addr = ATPL360_TX_DATA_ID;
 		eth_pl360_part_t* part = (eth_pl360_part_t*) pkt->buf;
 		part->key = index;
-		int dataptr = 0;
 		if (len > MAX_PAYLOAD_LEN) {
 			part->len = PKT_LEN_MASK + partnum++;
 			memcpy(part->payload, &(skb->data[dataptr]), MAX_PAYLOAD_LEN);
@@ -675,8 +679,8 @@ int ops_pl360_xmit(struct sk_buff *skb, struct net_device *dev) {
 			is_first = false;
 		}
 	}
-	/*printk(KERN_DEBUG "TX pkt len %u key 0x%04x parts %d", 
-				skb->len, index, partnum+1);*/
+	//printk(KERN_DEBUG "TX pkt len %u key 0x%04x parts %d", 
+	//			skb->len, index, partnum+1);
 	lp->netdev->stats.tx_packets++;
 	lp->netdev->stats.tx_bytes += skb->len;
     return 0;
