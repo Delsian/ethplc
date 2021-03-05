@@ -176,7 +176,7 @@ typedef enum atpl360_reg_id {
 #define PLC_MTU 1500
 #define PKT_LEN_MASK (0xF8)
 // How many incomplete packets allowed
-#define MAX_ETH_PLC_SESSIONS 3
+#define MAX_ETH_PLC_SESSIONS 4
 #define LAST_PART_INDICATOR 0xFF
 
 /* ! \name G3 TX Result values */
@@ -265,10 +265,11 @@ typedef struct {
 static txconf_t txcf;
 
 #define ATPL360_CMF_PKT_SIZE                      sizeof(tx_cfm_t)
-#define PL360_FIFO_SIZE 10
+#define PL360_FIFO_SIZE 128
 
 static struct kfifo tx_fifo; // Packet queued to transmit
 static status_t status;
+int memcount = 0;
 
 typedef struct {
     uint16_t len;
@@ -327,12 +328,12 @@ static void clear_parts(eth_pl360_rx_t* pkt) {
 static int parts_check_key(uint16_t key) {
 	int idx = -1;
 	for (int i = 0; i < MAX_ETH_PLC_SESSIONS; i++) {
-		if (rx_parts[i].age) rx_parts[i].age--;
 		if (rx_parts[i].key == key) {
 			idx = i;
 			rx_parts[i].age += MAX_ETH_PLC_SESSIONS;
-			continue;
+			break;
 		}
+		if (rx_parts[i].age) rx_parts[i].age--;
 		// Remove obsolete parts
 		if (rx_parts[i].age == 0 && rx_parts[i].key > 0 ) {
 			clear_parts(&(rx_parts[i]));
@@ -513,6 +514,8 @@ void pl360_handle_rx_work(struct work_struct *work)
 		txcf.conf.data_len = pkt->len;
 		pl360_datapkt(lp, PLC_CMD_WRITE, (plc_pkt_t*)&txcf);
 		pl360_datapkt(lp, PLC_CMD_WRITE, pkt);
+		memcount--;
+		//printk(KERN_DEBUG "Free %p, cnt %d", pkt, memcount);
 		kfree(pkt);
 		txstate = TX_BUSY;
 	}
@@ -658,6 +661,8 @@ int ops_pl360_xmit(struct sk_buff *skb, struct net_device *dev) {
 	while (len > 0) {
     	pkt = (plc_pkt_t*) kmalloc(sizeof(plc_pkt_t)
 				+ MAX_PLC_PKT_LEN, GFP_KERNEL);
+		//printk(KERN_DEBUG "Alloc %p", pkt);
+		memcount++;
 		pkt->addr = ATPL360_TX_DATA_ID;
 		eth_pl360_part_t* part = (eth_pl360_part_t*) pkt->buf;
 		part->key = index;

@@ -47,7 +47,7 @@
                 nrst-gpio = <&gpio 1 1>;
 				ldo-gpio = <&gpio 20 1>;
                 irq-gpio = <&gpio 22 0>;
-                spi-max-frequency = <2000000>;
+                spi-max-frequency = <8000000>;
             };
         };
     };
