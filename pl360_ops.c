@@ -599,6 +599,7 @@ int ops_pl360_start(struct net_device *ndev)
 
 	ret = kfifo_alloc(&tx_fifo,PL360_FIFO_SIZE,GFP_KERNEL);
 	if(ret) {
+		printk(KERN_INFO "FIFO alloc fail %d\n", ret );
 		goto err_ops_start;
 	}
 
@@ -643,7 +644,7 @@ int ops_pl360_stop(struct net_device *ndev)
 }
 
 int ops_pl360_xmit(struct sk_buff *skb, struct net_device *dev) {
-	static uint16_t index;
+	static uint16_t index = 0; // For part indexing on RX side
 	plc_pkt_t* pkt;
 	struct pl360_local *lp = netdev_priv(dev);
 	short len = skb->len;
@@ -688,5 +689,6 @@ int ops_pl360_xmit(struct sk_buff *skb, struct net_device *dev) {
 	//			skb->len, index, partnum+1);
 	lp->netdev->stats.tx_packets++;
 	lp->netdev->stats.tx_bytes += skb->len;
+	kfree_skb(skb);
     return 0;
 }

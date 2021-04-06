@@ -30,7 +30,7 @@ SOFTWARE.
 
 
 #define DRV_NAME	"pl360"
-#define DRV_VERSION	"1.01a"
+#define DRV_VERSION	"1.02a"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Eug Krashtan <eug.krashtan@gmail.com>");
