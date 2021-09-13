@@ -6,7 +6,7 @@
 /plugin/;
 
 / {
-	compatible = "brcm,bcm2835", "brcm,bcm2836", "brcm,bcm2708", "brcm,bcm2709";
+    compatible = "brcm,bcm2835", "brcm,bcm2836", "brcm,bcm2708", "brcm,bcm2709";
     /* disable spi-dev for spi0.0 */
     fragment@0 {
         target = <&spi0>;
@@ -16,23 +16,23 @@
     };
 
     fragment@1 {
-		target = <&spidev0>;
-		__overlay__ {
-	    	status = "disabled";
-		};
-	};
+        target = <&spidev0>;
+        __overlay__ {
+            status = "disabled";
+        };
+    };
 
-	fragment@2 {
-		target = <&gpio>;
-		__overlay__ {
-			pl360_pins: pl360_pins {
+    fragment@2 {
+        target = <&gpio>;
+        __overlay__ {
+            pl360_pins: pl360_pins {
                                 brcm,pins = <1 20 22>;
                                 brcm,function = <1 1 0>; /* out out out in*/
-			};
-		};
-	};
+            };
+        };
+    };
 
-	/* the spi config of the pl360 itself binding everything together */
+    /* the spi config of the pl360 itself binding everything together */
     fragment@3 {
         target = <&spi0>;
         __overlay__ {
@@ -45,19 +45,19 @@
                 pinctrl-names = "default";
                 pinctrl-0 = <&pl360_pins>;
                 nrst-gpio = <&gpio 1 1>;
-				ldo-gpio = <&gpio 20 1>;
+                ldo-gpio = <&gpio 20 1>;
                 irq-gpio = <&gpio 22 0>;
-                spi-max-frequency = <8000000>;
+                spi-max-frequency = <2000000>;
             };
         };
     };
 
     __overrides__ {
-		ldo_pin = <&pl360>,"ldo-gpio:4",
-		            <&pl360_pins>,"brcm,pins:4";
+        ldo_pin = <&pl360>,"ldo-gpio:4",
+                    <&pl360_pins>,"brcm,pins:4";
         nrst_pin = <&pl360>,"nrst-gpio:4",
-		            <&pl360_pins>,"brcm,pins:0";
+                    <&pl360_pins>,"brcm,pins:0";
         irq_pin = <&pl360>,"irq-gpio:4",
-		            <&pl360_pins>,"brcm,pins:8";
-	};
+                    <&pl360_pins>,"brcm,pins:8";
+    };
 };
